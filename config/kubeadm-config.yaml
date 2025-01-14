@@ -1,0 +1,42 @@
+apiVersion: kubeadm.k8s.io/v1beta3
+bootstrapTokens:
+- groups:
+  - system:bootstrappers:kubeadm:default-node-token
+  token: abcdef.0123456789abcdef # generate by the kubeadm
+  ttl: 24h0m0s
+  usages:
+  - signing
+  - authentication
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: 0.0.0.0 # set it as 0.0.0.0 or the INTERNAL ip of the master host
+  bindPort: 6443
+nodeRegistration:
+  criSocket: unix:///var/run/containerd/containerd.sock
+  name: node02
+  
+   # master node name
+  taints:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/master
+---
+apiServer:
+  timeoutForControlPlane: 4m0s
+apiVersion: kubeadm.k8s.io/v1beta3
+certificatesDir: /etc/kubernetes/pki
+clusterName: kubernetes
+controllerManager: {}
+dns:
+  type: CoreDNS
+
+etcd:
+  local:
+    dataDir: /data/etcd # default: /var/lib/etcd, you can change the path to store the etcd data
+imageRepository: registry.aliyuncs.com/google_containers # default: gcr.k8s.io, if you can not connect to the aliyun, you can use the defult imageRepository.
+kind: ClusterConfiguration
+kubernetesVersion: v1.28.14 # version of the kubernetes
+networking:
+  dnsDomain: cluster.local
+  podSubnet: 10.122.0.0/16 # set the ip address of the pod subnet of the Kubernetes cluster
+  serviceSubnet: 10.10.0.0/16 # set the ip address of the service subenet of the Kubernetes cluster
+scheduler: {}

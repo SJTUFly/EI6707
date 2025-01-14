@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  prometheus:
+    image: registry.cn-beijing.aliyuncs.com/insights-ops/prometheus:v2.52.0
+    container_name: prometheus
+    user: "0"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - /data/prometheus:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - nodeexporter
+      - dcgm
+      #- influxdb
+    networks:
+      - custom_network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml' # 使用容器内部的路径
+      - '--storage.tsdb.path=/prometheus' # 使用容器内部的路径
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--log.level=debug'
+
+  # influxdb:
+  #   build:
+  #     context: ./influxdb  # 指定 Dockerfile 所在目录
+  #     dockerfile: Dockerfile  # 指定 Dockerfile 名称
+  #   container_name: influxdb
+  #   environment:
+  #     - INFLUXDB_DB=prometheus
+  #     - INFLUXDB_ADMIN_USER=admin
+  #     - INFLUXDB_ADMIN_PASSWORD=admin_password
+  #     - INFLUXDB_HTTP_AUTH_ENABLED=true
+  #     - INFLUXDB_USER=app_user
+  #     - INFLUXDB_USER_PASSWORD=app_password
+  #   volumes:
+  #     - ./influxdb-data:/data/influxdb
+  #   ports:
+  #     - "8086:8086"
+  #   networks:
+  #     - custom_network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 3
+
+  nodeexporter:
+    image: registry.cn-beijing.aliyuncs.com/insights-ops/node-exporter:v1.8.0
+    container_name: node_exporter
+    pid: "host"  # 使用主机的PID命名空间
+    ports:
+      - "9100:9100"  # 暴露9100端口
+    volumes:
+      - "/data/node_exporter:/host:ro,rslave"  # 挂载主机根文件系统为只读
+    command:
+      - '--path.rootfs=/host'  # 设置宿主文件系统根目录为 /host
+    networks:
+      - custom_network  # 如果有自定义网络, 否则可以省略
+
+
+  dcgm:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.7-3.5.0-ubuntu22.04
+    container_name: dcgm_exporter
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    ports:
+      - "9400:9400"
+    networks:
+      - custom_network
+    volumes:
+      - ./dcgm-metrics.csv:/etc/dcgm-exporter/change-metrics.csv 
+
+  grafana:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/grafana/grafana:9.5.3
+    container_name: grafana
+    user: "0"
+    ports:
+      - "2999:3000"  # 将宿主机2999端口映射到容器3000端口
+    volumes:
+      - /data/grafana:/var/lib/grafana    # 挂载本地目录用于持久化Grafana数据
+      - ./grafana:/etc/grafana      # 挂载本地目录用于持久化Grafana配置
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin       # 设置管理员用户
+      - GF_SECURITY_ADMIN_PASSWORD=admin   # 设置管理员密码
+    depends_on:
+      - prometheus
+      #- influxdb
+    networks:
+      - custom_network
+
+networks:
+  custom_network:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  influxdb-data:
+  grafana-data:
+
